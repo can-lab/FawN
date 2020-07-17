@@ -13,7 +13,7 @@ import pandas as pd
 from nipype.pipeline import engine as pe
 from nipype.interfaces import io
 
-from fawn import fawn
+import fawn
 
 FUNC_DIR = "/path/to/data"
 SEQUENCE_NAME = "MYSEQUENCE"
