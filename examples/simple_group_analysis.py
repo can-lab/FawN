@@ -11,7 +11,7 @@ from glob import glob
 from nipype.pipeline import engine as pe
 from nipype.interfaces import io
 
-from fawn import fawn
+import fawn
 
 
 DATA_DIR = "/path/to/data"
