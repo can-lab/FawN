@@ -49,12 +49,12 @@ If you are working on the compute cluster of the Donders Institute, please follo
    
 ## Usage
 
-See [examples](https://github.com/can-lab/fawn/examples).
+See [examples](https://github.com/can-lab/fawn/tree/master/examples).
 
 ### Donders cluster
 If you are working on the compute cluster of the Donders Institute, please follow the following steps:
 1. Start a new interactive job by running command: `qsub -I -l 'procs=8, mem=64gb, walltime=24:00:00'`
 2. Load Anaconda3 module by running command: `module load anaconda3`
 3. Activate environment by running command: `source activate fawn_env`
-4. Write script `mystudy_fawn.py` (see [examples](https://github.com/can-lab/fawn/examples))
+4. Write script `mystudy_fawn.py` (see [examples](https://github.com/can-lab/fawn/tree/master/examples))
 5. Run script by running command: `python3 mystudy_fawn.py`
