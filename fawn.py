@@ -46,7 +46,7 @@ class _PtoZ(FSLCommand):
 
 def create_first_level_workflow(tr,
                                 unit="scans",
-                                high_pass_filter_cutoff=128,
+                                high_pass_filter_cutoff=100,
                                 normalized_timecourse_mean=None,
                                 bases={'dgamma': {'derivs': False}},
                                 f_contrasts=False,
@@ -62,7 +62,7 @@ def create_first_level_workflow(tr,
     unit : str, optional
         the unit of the data points (one of "scans" or "secs"; default="scans")
     high_pass_filter_cutoff : int, optional
-        the length of the high pass filter in seconds (default=128)
+        the length of the high pass filter in seconds (default=100)
     normalized_timecourse_mean : float, optional
         the mean of the normalized timecourse if applicable (default=None)
     bases : dict, optional
@@ -335,7 +335,7 @@ def _create_fixed_effects_workflow():
 
 def create_session_level_workflow(tr,
                                   unit="scans",
-                                  high_pass_filter_cutoff=128,
+                                  high_pass_filter_cutoff=100,
                                   normalized_timecourse_mean=None,
                                   bases={'dgamma': {'derivs': False}},
                                   mem_gb=8,
@@ -352,7 +352,7 @@ def create_session_level_workflow(tr,
     unit : str, optional
         the unit of the data points (one of "scans" or "secs"; default="scans")
     high_pass_filter_cutoff : int, optional
-        the length of the high pass filter in seconds (default=128)
+        the length of the high pass filter in seconds (default=100)
     normalized_timecourse_mean : float, optional
         the mean of the normalized timecourse if applicable (default=None)
     bases : dict, optional
