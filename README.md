@@ -22,13 +22,12 @@ The workflows expect preprocessed images (see also https://github.com/can-lab/fi
 
 ## Prerequisites
 1. Install [FSL](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/)
-2. Install [graphviz](https://www.graphviz.org/)
-3. Install nipype with
+2. Install nipype with
    ```
    pip3 install nipype
    ```
-4. Download [FawN](https://github.com/can-lab/FawN/master.zip)
-5. Install with
+3. Download [FawN](https://github.com/can-lab/FawN/master.zip)
+4. Install with
    ```
    pip3 install FawN-X.X.X.zip
    ```
