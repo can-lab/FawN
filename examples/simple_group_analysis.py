@@ -11,7 +11,7 @@ from glob import glob
 from nipype.pipeline import engine as pe
 from nipype.interfaces import io
 
-from fawn import workflows as fw
+from fawn import fawn
 
 
 DATA_DIR = "/path/to/data"
@@ -36,7 +36,7 @@ for subject_dir in sorted(glob(os.path.join(DATA_DIR, "sub-*", SESSION))):
 for contrast in range(len(copes)):
     # Group level analysis
     wf = pe.Workflow(name="group")
-    group_level = fw.create_higher_level_workflow(mode=mode)
+    group_level = fawn.create_higher_level_workflow(mode=mode)
     group_level.inputs.inputspec.in_copes = copes[contrast]
     group_level.inputs.inputspec.in_varcopes = varcopes[contrast]
     group_level.inputs.inputspec.model = model = {"regressor_names": ["effect"],
@@ -44,7 +44,7 @@ for contrast in range(len(copes)):
     group_level.inputs.inputspec.contrasts = [['group mean', 'T',['effect'],[1]]]
 
     # Thresholding
-    thresholding = fw.create_thresholding_workflow()
+    thresholding = fawn.create_thresholding_workflow()
     results = pe.Node(io.DataSink(),
                       base_directory = os.path.join(fmriprep_dir, "secondlevel", "transfer_rest", mode),
                       name='results')
