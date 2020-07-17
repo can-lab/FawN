@@ -13,7 +13,7 @@ import pandas as pd
 from nipype.pipeline import engine as pe
 from nipype.interfaces import io
 
-from fawn import workflows as fw
+from fawn import fawn
 
 FUNC_DIR = "/path/to/data"
 SEQUENCE_NAME = "MYSEQUENCE"
@@ -21,7 +21,7 @@ PREPROC = "5mm100sNone"
 TR = 1.0
 
 wf = pe.Workflow(name="single_subject")
-session_level = fw.create_session_level_workflow(tr=TR)
+session_level = fawn.create_session_level_workflow(tr=TR)
 session_level.inputspec.in_files = sorted(glob(os.path.join(
     FUNC_DIR, "*{0}*desc-preproc{1}*_bold.nii.gz".format(SEQUENCE_NAME, PREPROC))))
 session_level.inputspec.in_masks = sorted(glob(os.path.join(
