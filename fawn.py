@@ -1,3 +1,14 @@
+"""FawN.
+
+FSL analysis with NiPype.
+
+"""
+
+__author__ = "Florian Krause <f.krause@donders.ru.nl>
+__version__ = "0.1.0"
+__date__ = "2020-07-17"
+
+
 from nipype.pipeline import engine as pe
 from nipype.algorithms.modelgen import SpecifyModel
 from nipype.interfaces import fsl, utility, io
