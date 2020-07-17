@@ -26,10 +26,10 @@ The workflows expect preprocessed images (see also https://github.com/can-lab/fi
    ```
    pip3 install nipype
    ```
-3. Download [FawN](https://github.com/can-lab/FawN/master.zip)
+3. Download [FawN](https://github.com/can-lab/fawn/master.zip)
 4. Install with
    ```
-   pip3 install FawN-X.X.X.zip
+   pip3 install fawn-X.X.X.zip
    ```
    (replace X.X.X with latest release version)
 
@@ -39,10 +39,10 @@ If you are working on the compute cluster of the Donders Institute, please follo
 2. Create new environment in home directory by running command: `cd && conda create --name fawn_env`
 4. Activate new environment by running command: `source activate fawn_env`
 5. Install Nipype into environment by running command: `pip3 install nipype`
-6. Download [FawN](https://github.com/can-lab/FawN/master.zip)
+6. Download [FawN](https://github.com/can-lab/fawn/master.zip)
 7. Install with
    ```
-   pip3 install FawN-X.X.X.zip
+   pip3 install fawn-X.X.X.zip
    ```
    (replace X.X.X with latest release version)
    
