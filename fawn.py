@@ -4,16 +4,22 @@ FSL analysis with NiPype.
 
 """
 
-__author__ = "Florian Krause <f.krause@donders.ru.nl>
-__version__ = "0.1.0"
-__date__ = "2020-07-17"
+__author__ = "Florian Krause <f.krause@donders.ru.nl>"
+__version__ = "0.2.0"
+__date__ = "2020-07-30"
 
 
+import os
+
+import numpy as np
+import nibabel as nib
+from fsl.data.image import Image
+from fsl.utils.image.resample import resampleToReference
 from nipype.pipeline import engine as pe
 from nipype.algorithms.modelgen import SpecifyModel
 from nipype.interfaces import fsl, utility, io
 from nipype.interfaces.fsl.base import FSLCommand, FSLCommandInputSpec
-from nipype.interfaces.base import traits, TraitedSpec
+from nipype.interfaces.base import traits, TraitedSpec, File, BaseInterface, BaseInterfaceInputSpec
 
 
 class _PtoZInputSpec(FSLCommandInputSpec):
@@ -44,15 +50,239 @@ class _PtoZ(FSLCommand):
         return outputs
 
 
+class _ResampleImageInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, desc="image to be resampled")
+    reference = File(exists=True, desc="reference image")
+    order = traits.Int(mandatory=True,
+        desc='interpolation order (0=nearest, 1=linear, 2=cubic)')
+    smooth = traits.Bool(mandatory=True,
+        desc='smooth along axes which are being down-sampled')
+
+
+class _ResampleImageOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc="resampled image")
+
+
+class _ResampleImage(BaseInterface):
+    input_spec = _ResampleImageInputSpec
+    output_spec = _ResampleImageOutputSpec
+
+    @property
+    def filename(self):
+        print(self.inputs.in_file)
+        return os.path.split(self.inputs.in_file)[-1].split(".nii")[0]
+
+    def _run_interface(self, runtime):
+        newimage = resampleToReference(
+            Image(self.inputs.in_file), Image(self.inputs.reference),
+            order=self.inputs.order, smooth = self.inputs.smooth)
+        nib.save(nib.Nifti1Image(newimage[0], newimage[1]),
+                 "{0}_resampled.nii.gz".format(self.filename))
+
+        return runtime
+
+    def _list_outputs(self):
+        outputs = self._outputs().get()
+        outputs["out_file"] = os.path.abspath('{0}_resampled.nii.gz'.format(
+            self.filename))
+        return outputs
+
+
+class _TimecoursesToVolumeInputSpec(BaseInterfaceInputSpec):
+    in_files = traits.List(
+        traits.Any, mandatory=True,
+        desc='list of extracted timecourse textfiles')
+
+
+class _TimecoursesToVolumeOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc="timecourse volume")
+    out_mask = File(exists=True, desc="timecourse volume (dummy) mask")
+
+
+class _TimecoursesToVolume(BaseInterface):
+    input_spec = _TimecoursesToVolumeInputSpec
+    output_spec = _TimecoursesToVolumeOutputSpec
+
+    @property
+    def filename(self):
+        return os.path.split(self.inputs.in_files[0])[-1].split("_ts.txt")[0]
+
+    def _run_interface(self, runtime):
+        with open(self.inputs.in_files[0]) as f:
+            vol = np.zeros((len(self.inputs.in_files), 1, 1,
+                            len(f.readlines())))
+            mask = np.ones((len(self.inputs.in_files), 1, 1))
+        for c, tcf in enumerate(self.inputs.in_files):
+            with open(tcf) as f:
+                vol[c, 0, 0, :] = [float(x) for x in f.readlines()]
+        nib.save(nib.Nifti1Image(vol, None),
+                 "{0}_timecourses.nii.gz".format(self.filename))
+        nib.save(nib.Nifti1Image(mask, None),
+                 "{0}_timecourses_mask.nii.gz".format(self.filename))
+        return runtime
+
+    def _list_outputs(self):
+        outputs = self._outputs().get()
+        outputs["out_file"] = os.path.abspath(
+            '{0}_timecourses.nii.gz'.format(self.filename))
+        outputs["out_mask"] = os.path.abspath(
+            '{0}_timecourses_mask.nii.gz'.format(self.filename))
+        return outputs
+
+
+def create_resampling_workflow(interpolation="linear", smooth=True,
+                               thresholding=None, binarise=False,
+                               name="resampling"):
+    """Create a resampling workflow.
+
+    This will resample images into the space of a reference image.
+
+    Parameters
+    ----------
+    interpolaton : str, optional
+        the interpolation method (one of "nearest", "linear", "cubic";
+        default="linear")
+    smooth : bool, optional
+        whether to smooth along down-sampled axes (default=True)
+    thresholding : float or None, optional
+        the thresholding to apply to the resampled image (if not None;
+        default=None)
+    binarise : bool, optional
+        whether to binarise the resampled image (applied after thresholding;
+        default=False)
+
+    """
+
+    wf = pe.Workflow(name=name)
+
+    inputspec = pe.Node(utility.IdentityInterface(fields=['in_files',
+                                                          'reference']),
+                        name='inputspec')
+    resample = pe.MapNode(_ResampleImage(),
+                               iterfield=["in_file"],
+                               name="resample_mask")
+    resample.inputs.order = ["nearest", "linear", "cubic"].index(interpolation)
+    resample.inputs.smooth = smooth
+
+    op_string = ""
+    if thresholding is not None:
+        op_string += "-thr {0} ".format(thresholding)
+    if binarise:
+        op_string += "-bin"
+    threshold_binarise = pe.MapNode(fsl.ImageMaths(op_string=op_string),
+        iterfield= ['in_file'],
+        name= 'threshold_binarise')
+
+    outputspec = pe.Node(utility.IdentityInterface(fields=['out_files']),
+                         name='outputspec')
+
+    wf.connect(inputspec, "in_files", resample, "in_file")
+    wf.connect(inputspec, "reference", resample, "reference")
+    if op_string:
+        wf.connect(resample, "out_file", threshold_binarise, "in_file")
+        wf.connect(threshold_binarise, "out_file", outputspec, "out_files")
+    else:
+        wf.connect(resample, "out_file", outputspec, "out_files")
+
+    return wf
+
+def _create_extract_timecourses_workflow(eig=False):
+    wf = pe.Workflow(name="extract_timecourses")
+
+    fslmeants = pe.MapNode(fsl.utils.ImageMeants(),
+                           iterfield=["mask"], name="fslmeants")
+
+    tc2vol = pe.Node(_TimecoursesToVolume(), name="tc2vol")
+
+    wf.connect(fslmeants, "out_file", tc2vol, "in_files")
+
+    return wf
+
+def create_timecourse_extraction_workflow(method="mean",
+                                          name="timecourse_extraction"):
+    """Create a timecourse extraction workflow.
+
+    This creates images with N voxels in x-dimension, where N corresponds to
+    the number of masks given.
+
+    Can extract either the mean or first eigenvariate.
+
+    Parameters
+    ----------
+    method : str, optional
+        the timecourse extraction method ("mean" or "eigenvariate";
+        default="mean")
+
+    Inputs
+    ------
+    in_files : list
+        the functional images to extract timecourses from
+    in_masks : list
+        the binary masks to be applied
+
+    Outputs
+    -------
+    out_files : list
+        the extracted timecourses (one voxel per mask)
+    out_masks : list
+        the (dummy) masks for the extracted timecourses
+
+    Returns
+    -------
+    wf : `nipype.Workflow` object
+
+    """
+
+    wf = pe.Workflow(name=name)
+
+    def extract_timecourses(in_file, in_masks, method):
+        import os
+        from fawn import _create_extract_timecourses_workflow
+        wf = _create_extract_timecourses_workflow()
+        wf.inputs.fslmeants.in_file = in_file
+        wf.inputs.fslmeants.mask = in_masks
+        if method == "eigenvariate":
+            wf.inputs.fslmeants.eig = True
+        wf.base_dir = os.path.abspath(os.path.curdir)
+        res = wf.run()
+        outputs = list(res.nodes)[-1].result.outputs
+        return outputs.out_file, outputs.out_mask
+
+    inputspec = pe.Node(utility.IdentityInterface(fields=['in_files',
+                                                          'in_masks']),
+                        name='inputspec')
+
+    timecourses = pe.MapNode(utility.Function(input_names=["in_file",
+                                                           "in_masks",
+                                                           "method"],
+                                              output_names=["out_file",
+                                                            "out_mask"],
+                                              function=extract_timecourses),
+                             iterfield=["in_file"],
+                             name="extract_timecourses")
+    timecourses.inputs.method = method
+
+    outputspec = pe.Node(utility.IdentityInterface(fields=['out_files',
+                                                           'out_masks']),
+                        name='outputspec')
+
+    wf.connect(inputspec, "in_files", timecourses, "in_file")
+    wf.connect(inputspec, "in_masks", timecourses, "in_masks")
+    wf.connect(timecourses, "out_file", outputspec, "out_files")
+    wf.connect(timecourses, "out_mask", outputspec, "out_masks")
+
+    return wf
+
 def create_first_level_workflow(tr,
                                 unit="scans",
                                 high_pass_filter_cutoff=100,
-                                normalized_timecourse_mean=None,
+                                scale_median=True,
+                                voxel_threshold=1000,
+                                autocorrelation_smoothing=5,
                                 bases={'dgamma': {'derivs': False}},
                                 f_contrasts=False,
                                 mem_gb=8,
                                 name='first_level'):
-
     """Create a first level analysis workflow.
 
     Parameters
@@ -63,8 +293,14 @@ def create_first_level_workflow(tr,
         the unit of the data points (one of "scans" or "secs"; default="scans")
     high_pass_filter_cutoff : int, optional
         the length of the high pass filter in seconds (default=100)
-    normalized_timecourse_mean : float, optional
-        the mean of the normalized timecourse if applicable (default=None)
+    scale_median : bool, optional
+        whether to scale run median to 10000 (default=True)
+    voxel_threshold : numeric, optional
+        the timecourse mean value a voxel must be above to be included in the
+        analysis (default=1000)
+    autocorrelation_smoothing : numeric or None
+        the Susan mask size for smoothing the autocorrelation estimates (if
+        None, estimates will not be smoothed; default=5)
     bases : dict, optional
         the basis functions (default={'dgamma': {'derivs': False}})
     f_contrasts : bool, optional
@@ -129,19 +365,7 @@ def create_first_level_workflow(tr,
     def make_maskdata_opstrings(in_masks):
         return ['-mas {0}'.format(m) for m in in_masks]
 
-    def make_medianval_opstrings(in_masks):'copes',
-                                                           'fstats',
-                                                           'mask',
-                                                           'mrefvars',
-                                                           'pes',
-                                                           'res4d',
-                                                           'stats_dir',
-                                                           'tdof',
-                                                           'tstats',
-                                                           'var_copes',
-                                                           'weights',
-                                                           'zfstats',
-                                                           'zstats']
+    def make_medianval_opstrings(in_masks):
         return ['-k {0} -p 50'.format(m) for m in in_masks]
 
     def get_intnorm_opstrings(medianvals):
@@ -199,10 +423,6 @@ def create_first_level_workflow(tr,
                                         model_serial_correlations=True),
                        name='l1_model')
 
-    if not normalized_timecourse_mean:
-        threshold = 1000
-    else:
-        threshold = normalized_timecourse_mean / 10
     l1_gen = pe.MapNode(fsl.FEATModel(),
                         iterfield=['fsf_file', 'ev_files'],
                         name='l1_gen')
@@ -211,13 +431,22 @@ def create_first_level_workflow(tr,
         iterfield = ['design_file', 'in_file', 'tcon_file', 'fcon_file']
     else:
         iterfield = ['design_file', 'in_file', 'tcon_file']
-    l1_fit = pe.MapNode(fsl.FILMGLS(threshold=threshold,
-                                    results_dir='stats',
-                                    smooth_autocorr=True,
-                                    mask_size=5),
-                        iterfield=iterfield,
-                        mem_gb=mem_gb,
-                        name='l1_fit')
+
+    if autocorrelation_smoothing is None:
+        l1_fit = pe.MapNode(fsl.FILMGLS(threshold=voxel_threshold,
+                                        results_dir='stats',
+                                        smooth_autocorr=False),
+                            iterfield=iterfield,
+                            mem_gb=mem_gb,
+                            name='l1_fit')
+    else:
+        l1_fit = pe.MapNode(fsl.FILMGLS(threshold=voxel_threshold,
+                                        results_dir='stats',
+                                        smooth_autocorr=True,
+                                        mask_size=autocorrelation_smoothing),
+                            iterfield=iterfield,
+                            mem_gb=mem_gb,
+                            name='l1_fit')
 
     results_select = pe.MapNode(io.SelectFiles({'cope': 'cope*.nii.gz',
                                                 'pe': 'pe*.nii.gz',
@@ -238,7 +467,7 @@ def create_first_level_workflow(tr,
                                                            'zstat_images']),
                          name='outputspec')
 
-    if normalized_timecourse_mean is None:
+    if scale_median:
         wf.connect(inputspec, 'in_files', medianval, 'in_file')
         wf.connect(inputspec, 'in_masks', medianval_opstrings, 'in_masks')
         #wf.connect(inputspec, 'in_files', maskdata, 'in_file')
@@ -336,7 +565,9 @@ def _create_fixed_effects_workflow():
 def create_session_level_workflow(tr,
                                   unit="scans",
                                   high_pass_filter_cutoff=100,
-                                  normalized_timecourse_mean=None,
+                                  scale_median=True,
+                                  voxel_threshold=1000,
+                                  autocorrelation_smoothing=5,
                                   bases={'dgamma': {'derivs': False}},
                                   mem_gb=8,
                                   name='session_level'):
@@ -353,8 +584,14 @@ def create_session_level_workflow(tr,
         the unit of the data points (one of "scans" or "secs"; default="scans")
     high_pass_filter_cutoff : int, optional
         the length of the high pass filter in seconds (default=100)
-    normalized_timecourse_mean : float, optional
-        the mean of the normalized timecourse if applicable (default=None)
+    scale_median : bool, optional
+        whether to scale run median to 10000 (default=True)
+    voxel_threshold : numeric, optional
+        the timecourse mean value a voxel must be above to be included in the
+        analysis (default=1000)
+    autocorrelation_smoothing : numeric or None
+        the Susan mask size for smoothing the autocorrelation estimates (if
+        None, estimates will not be smoothed; default=5)
     bases : dict, optional
         the basis functions (default={'dgamma': {'derivs': False}})
     mem_gb : int, optional
@@ -440,9 +677,9 @@ def create_session_level_workflow(tr,
         tr,
         unit=unit,
         high_pass_filter_cutoff=high_pass_filter_cutoff,
-        normalized_timecourse_mean=normalized_timecourse_mean,
-        bases=bases,
-        mem_gb=mem_gb)
+        scale_median=scale_median, voxel_threshold=voxel_threshold,
+        autocorrelation_smoothing=autocorrelation_smoothing,
+        bases=bases, mem_gb=mem_gb)
 
     add_masks_inputs = pe.Node(utility.Function(
         input_names=["mask_files"],
@@ -882,3 +1119,4 @@ def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
     wf.connect(threshold_localmax_neg, 'localmax_thresholded',
                outputspec, 'cluster_neg_max_thresh')
     return wf
+
