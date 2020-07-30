@@ -92,6 +92,9 @@ class _TimecoursesToVolumeInputSpec(BaseInterfaceInputSpec):
     in_files = traits.List(
         traits.Any, mandatory=True,
         desc='list of extracted timecourse textfiles')
+    normalization = traits.Str(
+        mandatory=True,
+        desc='normalization type ("Z", "PCT" or "")')
 
 
 class _TimecoursesToVolumeOutputSpec(TraitedSpec):
@@ -114,19 +117,31 @@ class _TimecoursesToVolume(BaseInterface):
             mask = np.ones((len(self.inputs.in_files), 1, 1))
         for c, tcf in enumerate(self.inputs.in_files):
             with open(tcf) as f:
-                vol[c, 0, 0, :] = [float(x) for x in f.readlines()]
+                tc = [float(x) for x in f.readlines()]
+                if self.inputs.normalization.lower() == "pct":
+                    m = np.mean(tc)
+                    tc = [(x / m) * 100 for x in tc]
+                elif self.inputs.normalization.lower() == "z":
+                    m = np.mean(tc)
+                    sd = np.std(tc)
+                    tc = [(x - m) / s for x in tc]
+                vol[c, 0, 0, :] = tc
         nib.save(nib.Nifti1Image(vol, None),
-                 "{0}_timecourses.nii.gz".format(self.filename))
+                 "{0}_timecourses{1}.nii.gz".format(
+                     self.filename, self.inputs.normalization.upper()))
         nib.save(nib.Nifti1Image(mask, None),
-                 "{0}_timecourses_mask.nii.gz".format(self.filename))
+                 "{0}_timecourses{1}_mask.nii.gz".format(
+                     self.filename, self.inputs.normalization.upper()))
         return runtime
 
     def _list_outputs(self):
         outputs = self._outputs().get()
         outputs["out_file"] = os.path.abspath(
-            '{0}_timecourses.nii.gz'.format(self.filename))
+            '{0}_timecourses{1}.nii.gz'.format(
+                     self.filename, self.inputs.normalization.upper()))
         outputs["out_mask"] = os.path.abspath(
-            '{0}_timecourses_mask.nii.gz'.format(self.filename))
+            '{0}_timecourses{1}_mask.nii.gz'.format(
+                     self.filename, self.inputs.normalization.upper()))
         return outputs
 
 
@@ -199,6 +214,7 @@ def _create_extract_timecourses_workflow(eig=False):
     return wf
 
 def create_timecourse_extraction_workflow(method="mean",
+                                          normalization=None,
                                           name="timecourse_extraction"):
     """Create a timecourse extraction workflow.
 
@@ -212,6 +228,9 @@ def create_timecourse_extraction_workflow(method="mean",
     method : str, optional
         the timecourse extraction method ("mean" or "eigenvariate";
         default="mean")
+    normalization : str or None, optional
+        the type of timecourse normalization (one of "Z" or "PCT"); if None,
+        timecourses will not be normalized (default=None)
 
     Inputs
     ------
@@ -235,7 +254,7 @@ def create_timecourse_extraction_workflow(method="mean",
 
     wf = pe.Workflow(name=name)
 
-    def extract_timecourses(in_file, in_masks, method):
+    def extract_timecourses(in_file, in_masks, method, normalization):
         import os
         from fawn import _create_extract_timecourses_workflow
         wf = _create_extract_timecourses_workflow()
@@ -243,6 +262,9 @@ def create_timecourse_extraction_workflow(method="mean",
         wf.inputs.fslmeants.mask = in_masks
         if method == "eigenvariate":
             wf.inputs.fslmeants.eig = True
+        if normalization is None:
+            normalization = ""
+        wf.inputs.tc2vol.normalization = normalization
         wf.base_dir = os.path.abspath(os.path.curdir)
         res = wf.run()
         outputs = list(res.nodes)[-1].result.outputs
@@ -254,13 +276,15 @@ def create_timecourse_extraction_workflow(method="mean",
 
     timecourses = pe.MapNode(utility.Function(input_names=["in_file",
                                                            "in_masks",
-                                                           "method"],
+                                                           "method",
+                                                           "normalization"],
                                               output_names=["out_file",
                                                             "out_mask"],
                                               function=extract_timecourses),
                              iterfield=["in_file"],
                              name="extract_timecourses")
     timecourses.inputs.method = method
+    timecourses.inputs.normalization = normalization
 
     outputspec = pe.Node(utility.IdentityInterface(fields=['out_files',
                                                            'out_masks']),
