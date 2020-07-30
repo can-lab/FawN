@@ -166,6 +166,22 @@ def create_resampling_workflow(interpolation="linear", smooth=True,
         whether to binarise the resampled image (applied after thresholding;
         default=False)
 
+    Inputs
+    ------
+    in_files : list
+        the images to resample
+    reference : str
+        the reference image
+
+    Outputs
+    -------
+    out_files : list
+        the resampled images
+
+    Returns
+    -------
+    wf : `nipype.Workflow` object
+
     """
 
     wf = pe.Workflow(name=name)
