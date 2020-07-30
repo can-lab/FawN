@@ -9,9 +9,9 @@ FawN is a collection of NiPype workflows for building FSL-style fMRI analyisis p
 
 Currently available workflows:
 
-* **resampling**
+* **resampling**  
   Resample images into size of reference image
-* **timecourse_extraction**
+* **timecourse_extraction**  
   Extract timecourses from binary masks
 * **"first_level"**  
   Analysis of single functional runs
