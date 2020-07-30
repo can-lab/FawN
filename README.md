@@ -9,6 +9,10 @@ FawN is a collection of NiPype workflows for building FSL-style fMRI analyisis p
 
 Currently available workflows:
 
+* **"resampling"**  
+  Resample images into size of reference image
+* **"timecourse_extraction"**  
+  Extract timecourses from binary masks
 * **"first_level"**  
   Analysis of single functional runs
 * **"session_level"**  
@@ -24,7 +28,7 @@ The workflows expect preprocessed images (see also https://github.com/can-lab/fi
 1. Install [FSL](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/)
 2. Install nipype with
    ```
-   pip3 install nipype
+   pip3 install nipype fslpy
    ```
 3. Download [FawN](https://github.com/can-lab/FawN/master.zip)
 4. Install with
@@ -38,7 +42,7 @@ If you are working on the compute cluster of the Donders Institute, please follo
 1. Load Anaconda3 module by running command: `module load anaconda3`
 2. Create new environment in home directory by running command: `cd && conda create --name fawn_env`
 4. Activate new environment by running command: `source activate fawn_env`
-5. Install Nipype into environment by running command: `pip3 install nipype`
+5. Install Nipype into environment by running command: `pip3 install nipype fslpy`
 6. Download [FawN](https://github.com/can-lab/fawn/master.zip)
 7. Install with
    ```
