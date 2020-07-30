@@ -23,7 +23,7 @@ PREPROC = "5mm100sNone"
 
 wf = pe.Workflow(name="roi_analysis")
 
-# Resample ROI masks into data dimensions (must already be in same space!)
+# Resample ROI masks into same size as data (must already be in same space!)
 resample = fawn.create_resampling_workflow(thresholding=0.5, binarise=True)
 resample.inputs.inputspec.in_files = ["ROI1.nii.gz",
                                       "ROI2.nii.gz"]

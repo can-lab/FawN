@@ -135,7 +135,7 @@ def create_resampling_workflow(interpolation="linear", smooth=True,
                                name="resampling"):
     """Create a resampling workflow.
 
-    This will resample images into the space of a reference image.
+    This will resample images into the size of a reference image.
 
     Parameters
     ----------
