@@ -1,1 +1,1 @@
-from _fawn import *
+from ._fawn import *
