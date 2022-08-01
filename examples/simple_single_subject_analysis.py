@@ -24,14 +24,14 @@ wf = pe.Workflow(name="single_subject")
 
 # Analyze all runs in the session in one go
 session = fawn.create_session_level_workflow(tr=TR)
-session.inputspec.in_files = sorted(glob(os.path.join(
+session.inputs.inputspec.in_files = sorted(glob(os.path.join(
     FUNC_DIR, "*{0}*desc-preproc{1}*_bold.nii.gz".format(SEQUENCE_NAME,
                                                          PREPROC))))
-session.inputspec.in_masks = sorted(glob(os.path.join(
+session.inputs.inputspec.in_masks = sorted(glob(os.path.join(
     FUNC_DIR, "*{0}*desc-brain_mask.nii.gz".format(SEQUENCE_NAME))))
 
 # Specify design
-session.inputspec.models = []
+session.inputs.inputspec.models = []
 motion_files = sorted(glob(os.path.join(
     FUNC_DIR, "*{0}*confounds_regressors.tsv".format(SEUQENCE_NAME))))
 event_files = sorted(glob(os.path.join(
@@ -42,7 +42,7 @@ for f in files:
     condition_names = list(set(events.trial_type))
     motion = pd.read_csv(f[1], sep='\t')
     motion_names = ['trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z']
-    session.inputspec.models.append(
+    session.inputs.inputspec.models.append(
         {"conditions": condition_names,
          "onsets": [events[events.trial_type == c]["onset"].values \
                     for c in condition_names],
@@ -52,7 +52,7 @@ for f in files:
          "regressors": motion[motion_names].fillna(0).values.T})
 
 # Specify contrasts
-session.inputspec.contrasts = [
+session.inputs.inputspec.contrasts = [
     ('cond1', 'T', ['cond1', 'cond2'], [1, 0]),
     ('cond2', 'T', ['cond1', 'cond2'], [0, 1]),
     ('cond1 > cond2', 'T', ['cond1', 'cond2'], [1, -1])]
