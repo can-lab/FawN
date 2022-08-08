@@ -30,7 +30,7 @@ The workflows expect preprocessed images (see also https://github.com/can-lab/fi
    ```
    pip3 install nipype fslpy
    ```
-3. Download [FawN](https://github.com/can-lab/FawN/master.zip)
+3. Download [FawN](https://github.com/can-lab/FawN/archive/refs/heads/master.zip)
 4. Install with
    ```
    pip3 install FawN-X.X.X.zip
@@ -43,7 +43,7 @@ If you are working on the compute cluster of the Donders Institute, please follo
 2. Create new environment in home directory by running command: `cd && python3 -m venv fawn_env`
 4. Activate new environment by running command: `source fawn_env/bin/activate`
 5. Install Nipype into environment by running command: `pip3 install nipype fslpy`
-6. Download [FawN](https://github.com/can-lab/fawn/master.zip)
+6. Download [FawN](https://github.com/can-lab/FawN/archive/refs/heads/master.zip)
 7. Install with
    ```
    pip3 install FawN-X.X.X.zip
