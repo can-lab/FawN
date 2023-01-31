@@ -317,6 +317,7 @@ def create_first_level_workflow(tr,
                                 autocorrelation_smoothing=5,
                                 bases={'dgamma': {'derivs': False}},
                                 f_contrasts=False,
+                                mask_data=True,
                                 mem_gb=8,
                                 name='first_level'):
     """Create a first level analysis workflow.
@@ -341,6 +342,8 @@ def create_first_level_workflow(tr,
         the basis functions (default={'dgamma': {'derivs': False}})
     f_contrasts : bool, optional
         whether f-contrasts are specified to be estimated (default=False)
+    mask_data : bool, optional
+        whether to mask the analysis with a brain mask (default=True)
     mem_gb : int, optional
         the amount of memory in GB to be allocated to the model fittin nodes
         (default=8)
@@ -504,28 +507,37 @@ def create_first_level_workflow(tr,
                          name='outputspec')
 
     if scale_median:
-        wf.connect(inputspec, 'in_files', medianval, 'in_file')
-        wf.connect(inputspec, 'in_masks', medianval_opstrings, 'in_masks')
-        #wf.connect(inputspec, 'in_files', maskdata, 'in_file')
-        #wf.connect(inputspec, 'in_masks', maskdata_opstrings, 'in_masks')
-        #wf.connect(maskdata_opstrings, 'opstrings', maskdata, 'op_string')
-        #wf.connect(maskdata, 'out_file', medianval, 'in_file')
-        #wf.connect(inputspec, 'in_masks', medianval_opstrings, 'in_masks')
-        wf.connect(medianval_opstrings, 'opstrings', medianval, 'op_string')
-        wf.connect(inputspec, 'in_files', intnorm, 'in_file')
-        #wf.connect(maskdata, 'out_file', intnorm, 'in_file')
-        wf.connect(medianval, ('out_stat', get_intnorm_opstrings),
-                   intnorm, 'op_string')
-        wf.connect(intnorm, 'out_file', l1_spec, 'functional_runs')
-        wf.connect(intnorm, 'out_file', l1_fit, 'in_file')
+        if mask_data:
+            wf.connect(inputspec, 'in_files', maskdata, 'in_file')
+            wf.connect(inputspec, 'in_masks', maskdata_opstrings, 'in_masks')
+            wf.connect(maskdata_opstrings, 'opstrings', maskdata, 'op_string')
+            wf.connect(maskdata, 'out_file', medianval, 'in_file')
+            wf.connect(inputspec, 'in_masks', medianval_opstrings, 'in_masks')
+            wf.connect(medianval_opstrings, 'opstrings', medianval, 'op_string')
+            wf.connect(maskdata, 'out_file', intnorm, 'in_file')
+            wf.connect(medianval, ('out_stat', get_intnorm_opstrings),
+                       intnorm, 'op_string')
+            wf.connect(intnorm, 'out_file', l1_spec, 'functional_runs')
+            wf.connect(intnorm, 'out_file', l1_fit, 'in_file')
+        else:
+            wf.connect(inputspec, 'in_files', medianval, 'in_file')
+            wf.connect(inputspec, 'in_masks', medianval_opstrings, 'in_masks')
+            wf.connect(medianval_opstrings, 'opstrings', medianval, 'op_string')
+            wf.connect(inputspec, 'in_files', intnorm, 'in_file')
+            wf.connect(medianval, ('out_stat', get_intnorm_opstrings),
+                       intnorm, 'op_string')
+            wf.connect(intnorm, 'out_file', l1_spec, 'functional_runs')
+            wf.connect(intnorm, 'out_file', l1_fit, 'in_file')
     else:
-        wf.connect(inputspec, 'in_files', l1_spec, 'functional_runs')
-        wf.connect(inputspec, 'in_files', l1_fit, 'in_file')
-        #wf.connect(inputspec, 'in_files', maskdata, 'in_file')
-        #wf.connect(inputspec, 'in_masks', maskdata_opstrings, 'in_masks')
-        #wf.connect(maskdata_opstrings, 'opstrings', maskdata, 'op_string')
-        #wf.connect(maskdata, 'out_file', l1_spec, 'functional_runs')
-        #wf.connect(maskdata, 'out_file', l1_fit, 'in_file')
+        if mask_data:
+            wf.connect(inputspec, 'in_files', maskdata, 'in_file')
+            wf.connect(inputspec, 'in_masks', maskdata_opstrings, 'in_masks')
+            wf.connect(maskdata_opstrings, 'opstrings', maskdata, 'op_string')
+            wf.connect(maskdata, 'out_file', l1_spec, 'functional_runs')
+            wf.connect(maskdata, 'out_file', l1_fit, 'in_file')
+        else:
+            wf.connect(inputspec, 'in_files', l1_spec, 'functional_runs')
+            wf.connect(inputspec, 'in_files', l1_fit, 'in_file')
     wf.connect(inputspec, 'models' , dicts_to_bunches, 'dicts')
     wf.connect(dicts_to_bunches, 'bunches', l1_spec, 'subject_info')
     wf.connect(inputspec, 'contrasts', l1_model, 'contrasts')
@@ -715,7 +727,7 @@ def create_session_level_workflow(tr,
         high_pass_filter_cutoff=high_pass_filter_cutoff,
         scale_median=scale_median, voxel_threshold=voxel_threshold,
         autocorrelation_smoothing=autocorrelation_smoothing,
-        bases=bases, mem_gb=mem_gb)
+        bases=bases, mask_data=False, mem_gb=mem_gb)
 
     add_masks_inputs = pe.Node(utility.Function(
         input_names=["mask_files"],
