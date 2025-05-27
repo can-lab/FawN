@@ -942,6 +942,7 @@ def create_higher_level_workflow(mode="flame1", name="higher_level"):
 def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
                                  cluster_connectivity=26,
                                  cluster_threshold=3.2,
+                                 use_mm=True,
                                  name="thresholding"):
     """Create a thresholding workflow.
 
