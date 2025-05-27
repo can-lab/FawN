@@ -959,6 +959,8 @@ def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
     cluster_threshold : float, optional
         the initial cluster threshold (if None, use single voxel FEW threshold;
         default=3.2)
+    use_mm : bool, optional
+        whether to use mm instead of voxel coordinates (default=True)
     name : str
         the name of the workflow (default="thresholding")
 
@@ -1068,7 +1070,8 @@ def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
         'connectivity': cluster_connectivity,
         'out_threshold_file': True,
         'out_index_file': True,
-        'out_localmax_txt_file': True
+        'out_localmax_txt_file': True,
+        'use_mm': use_mm
     }
     cluster_pos = pe.MapNode(fsl.Cluster(**cluster_kwargs),
                              iterfield=["in_file"],
