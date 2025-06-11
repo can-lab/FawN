@@ -311,7 +311,7 @@ def create_timecourse_extraction_workflow(method="mean",
 
 def create_first_level_workflow(tr,
                                 unit="scans",
-                                high_pass_filter_cutoff=100,
+                                high_pass_filter_cutoff=None,
                                 scale_median=True,
                                 voxel_threshold=1000,
                                 autocorrelation_smoothing=5,
@@ -329,7 +329,7 @@ def create_first_level_workflow(tr,
     unit : str, optional
         the unit of the data points (one of "scans" or "secs"; default="scans")
     high_pass_filter_cutoff : int, optional
-        the length of the high pass filter in seconds (default=100)
+        the length of the high pass filter in seconds (default=None)
     scale_median : bool, optional
         whether to scale run median to 10000 (default=True)
     voxel_threshold : numeric, optional
@@ -450,6 +450,9 @@ def create_first_level_workflow(tr,
                                                 function=make_bunch),
                                name="dict_to_bunch")
 
+    if high_pass_filter_cutoff is None:
+        high_pass_filter_cutoff = np.inf
+    
     l1_spec = pe.Node(SpecifyModel(
         parameter_source='FSL',
         time_repetition=tr,
@@ -612,7 +615,7 @@ def _create_fixed_effects_workflow():
 
 def create_session_level_workflow(tr,
                                   unit="scans",
-                                  high_pass_filter_cutoff=100,
+                                  high_pass_filter_cutoff=None,
                                   scale_median=True,
                                   voxel_threshold=1000,
                                   autocorrelation_smoothing=5,
@@ -631,7 +634,7 @@ def create_session_level_workflow(tr,
     unit : str, optional
         the unit of the data points (one of "scans" or "secs"; default="scans")
     high_pass_filter_cutoff : int, optional
-        the length of the high pass filter in seconds (default=100)
+        the length of the high pass filter in seconds (default=None)
     scale_median : bool, optional
         whether to scale run median to 10000 (default=True)
     voxel_threshold : numeric, optional
@@ -864,6 +867,9 @@ def create_higher_level_workflow(mode="flame1", name="higher_level"):
             item = [item]
         return item
 
+    def _dof(model):
+        return len(model["regressors"][0]) - len(model["regressors"])
+        
     inputspec = pe.Node(utility.IdentityInterface(fields=['in_copes',
                                                           'in_varcopes',
                                                           'model',
@@ -890,6 +896,11 @@ def create_higher_level_workflow(mode="flame1", name="higher_level"):
     multreg_model = pe.Node(fsl.MultipleRegressDesign(), name='multreg_model')
     flameo = pe.Node(fsl.FLAMEO(run_mode=mode), name='flameo')
 
+    dof = pe.Node(utility.Function(input_names=["model"],
+                                   output_names=["dof"],
+                                   function=_dof),
+                  name="dof")
+    
     outputspec = pe.Node(utility.IdentityInterface(fields=['copes',
                                                            'fstats',
                                                            'mask',
@@ -919,6 +930,7 @@ def create_higher_level_workflow(mode="flame1", name="higher_level"):
                multreg_model, 'regressors')
     wf.connect(inputspec, ('model', get_groups), multreg_model, 'groups')
     wf.connect(inputspec, 'contrasts', multreg_model, 'contrasts')
+    wf.connect(inputspec, 'model', dof, 'model')
     wf.connect(multreg_model, 'design_mat', flameo, 'design_file')
     wf.connect(multreg_model, 'design_con', flameo, 't_con_file')
     wf.connect(multreg_model, 'design_fts', flameo, 'f_con_file')
@@ -936,17 +948,19 @@ def create_higher_level_workflow(mode="flame1", name="higher_level"):
     wf.connect(flameo, 'weights', outputspec, 'weights')
     wf.connect(flameo, ('zfstats', make_list), outputspec, 'zfstats')
     wf.connect(flameo, ('zstats', make_list), outputspec, 'zstats')
-
+    wf.connect(dof, 'dof', outputspec, 'dof')
+    
     return wf
 
 def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
                                  cluster_connectivity=26,
-                                 cluster_threshold=3.2,
+                                 cluster_threshold=3.1,
                                  use_mm=True,
                                  name="thresholding"):
     """Create a thresholding workflow.
 
     Thresholds at voxel-level (FWE corrected) and cluster-level.
+    Can iterate over multiple contrasts (zstats/copes).
 
     Parameters
     ----------
@@ -958,7 +972,7 @@ def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
         the cluster connectivity value (one of 6, 18, 26; default=26)
     cluster_threshold : float, optional
         the initial cluster threshold (if None, use single voxel FEW threshold;
-        default=3.2)
+        default=3.1)
     use_mm : bool, optional
         whether to use mm instead of voxel coordinates (default=True)
     name : str
@@ -967,13 +981,15 @@ def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
     Inputs
     ------
     in_zstats : list
-        the z-statistic images
+        the z-statistic images (one for each contrast)
     in_copes : list
-        the estimate contrast images
+        the estimate contrast images (one for each contrast)
     in_res4d : list
         the model fit residual mean-squared error images
     in_mask : str
         the mask image used to mask the analysis
+    dof : int
+        the degrees of freedom of the model
 
     Ouputs
     ------
@@ -989,10 +1005,6 @@ def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
         the negative cluster index image
     cluster_neg_max : str
         the negative negative local maixma file
-    cluster_pos_max_thresh : str
-        the thresholded positive cluster local maxima file
-    cluster_neg_max_thresh : str
-        the thresholded negative cluster local maxima file
 
     Returns
     -------
@@ -1002,46 +1014,19 @@ def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
 
     wf = pe.Workflow(name=name)
 
-    def _dof(copes):
-        return len(copes) - 1
-
     def _neg(val):
         return -val
 
     def _resel_count(volume, resel_size):
         return volume/resel_size
 
-    def _threshold_localmax(localmax_file, fwe_threshold):
-        import os
-        with open(localmax_file) as f_in:
-            with open("localmax_thresholded.txt", 'w') as f_out:
-                fsl_cluster = 1000000
-                new_cluster = 0
-                for line in f_in.readlines():
-                    tmp = line.split("\t")
-                    if tmp[0].startswith("Cluster"):
-                        f_out.write(line)
-                    elif abs(float(tmp[1])) > abs(fwe_threshold):
-                        if int(tmp[0]) < fsl_cluster:
-                            fsl_cluster = int(tmp[0])
-                            new_cluster += 1
-                        tmp[0] = str(new_cluster)
-                        f_out.write("\t".join(tmp))
-        return os.path.abspath("localmax_thresholded.txt")
-
     inputspec = pe.MapNode(utility.IdentityInterface(fields=['in_zstats',
                                                              'in_copes',
                                                              'in_res4d',
-                                                             'in_mask']),
-                           iterfield=["in_zstats"],
+                                                             'in_mask',
+                                                             'dof']),
+                           iterfield=["in_zstats", "in_copes"],
                            name='inputspec')
-
-    merge_copes = pe.Node(fsl.Merge(dimension='t'), name='merge_copes')
-
-    dof = pe.Node(utility.Function(input_names=["copes"],
-                                   output_names=["dof"],
-                                   function=_dof),
-                  name="dof")
 
     if two_tailed:
         pvalue /= 2
@@ -1099,35 +1084,18 @@ def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
                                         "operand_file"],
                              name='cluster_all')
 
-    threshold_localmax_pos = pe.MapNode(utility.Function(
-        input_names=["localmax_file",
-                     "fwe_threshold"],
-        output_names=["localmax_thresholded"],
-        function=_threshold_localmax),
-                                        iterfield=["localmax_file"],
-                                        name="threshold_localmax_pos")
-    threshold_localmax_neg = pe.MapNode(utility.Function(
-        input_names=["localmax_file",
-                     "fwe_threshold"],
-        output_names=["localmax_thresholded"],
-        function=_threshold_localmax),
-                                        iterfield=["localmax_file"],
-                                        name="threshold_localmax_neg")
-
     outputspec = pe.Node(utility.IdentityInterface(
         fields=['fwe_zstats',
                 'cluster_zstats',
                 'cluster_pos_idx',
                 'cluster_pos_max',
                 'cluster_neg_idx',
-                'cluster_neg_max',
-                'cluster_pos_max_thresh',
-                'cluster_neg_max_thresh']),
+                'cluster_neg_max']),
                          name='outputspec')
 
     wf.connect(inputspec, 'in_res4d', smoothness, 'residual_fit_file')
     wf.connect(inputspec, 'in_copes', dof, 'copes')
-    wf.connect(dof, 'dof', smoothness, 'dof')
+    wf.connect(inputspec, 'dof', smoothness, 'dof')
     wf.connect(inputspec, 'in_mask', smoothness, 'mask_file')
     wf.connect(inputspec, 'in_zstats', fwe_nonsig0, 'in_file')
     wf.connect(fwe_nonsig0, 'out_file', fwe_nonsig1, "in_file")
@@ -1139,14 +1107,13 @@ def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
     wf.connect(inputspec, 'in_zstats', fwe_thresh, 'in_file')
     wf.connect(fwe_nonsig1, 'out_file', fwe_thresh, 'operand_file')
     wf.connect(inputspec, 'in_zstats', cluster_pos, 'in_file')
-    wf.connect(inputspec, 'in_copes', merge_copes, 'in_files')
-    wf.connect(merge_copes, 'merged_file', cluster_pos, 'cope_file')
+    wf.connect(inputspec, 'in_copes', cluster_pos, 'cope_file')
     wf.connect(smoothness, 'volume', cluster_pos, 'volume')
     wf.connect(smoothness, 'dlh', cluster_pos, 'dlh')
     wf.connect(inputspec, 'in_zstats', zstat_inv, 'in_file')
     wf.connect(zstat_inv, 'out_file', cluster_neg, 'in_file')
     wf.connect(cluster_neg, 'threshold_file', cluster_inv, 'in_file')
-    wf.connect(merge_copes, 'merged_file', cluster_neg, 'cope_file')
+    wf.connect(inputspec, 'in_copes', cluster_neg, 'cope_file')
     wf.connect(smoothness, 'volume', cluster_neg, 'volume')
     wf.connect(smoothness, 'dlh', cluster_neg, 'dlh')
     if cluster_threshold is None:
@@ -1160,15 +1127,6 @@ def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
     wf.connect(cluster_pos, 'localmax_txt_file', outputspec, 'cluster_pos_max')
     wf.connect(cluster_neg, 'index_file', outputspec, 'cluster_neg_idx')
     wf.connect(cluster_neg, 'localmax_txt_file', outputspec, 'cluster_neg_max')
-    wf.connect(cluster_pos, 'localmax_txt_file',
-               threshold_localmax_pos, 'localmax_file')
-    wf.connect(fwe_ptoz, 'zstat', threshold_localmax_pos, 'fwe_threshold')
-    wf.connect(threshold_localmax_pos, 'localmax_thresholded',
-               outputspec, 'cluster_pos_max_thresh')
-    wf.connect(cluster_neg, 'localmax_txt_file',
-               threshold_localmax_neg, 'localmax_file')
-    wf.connect(fwe_ptoz, 'zstat', threshold_localmax_neg, 'fwe_threshold')
-    wf.connect(threshold_localmax_neg, 'localmax_thresholded',
-               outputspec, 'cluster_neg_max_thresh')
+
     return wf
 
