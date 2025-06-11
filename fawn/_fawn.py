@@ -837,6 +837,8 @@ def create_higher_level_workflow(mode="flame1", name="higher_level"):
         the z-statistic images for each f-contrast
     zstats : list
         the z-statistic images for each contrast
+    dof : int
+        the degrees of freedom of the model
 
     Returns
     -------
@@ -913,7 +915,8 @@ def create_higher_level_workflow(mode="flame1", name="higher_level"):
                                                            'var_copes',
                                                            'weights',
                                                            'zfstats',
-                                                           'zstats']),
+                                                           'zstats',
+                                                           'dof']),
                         name='outputspec')
 
     wf.connect(inputspec, 'in_copes', merge_copes, 'in_files')
