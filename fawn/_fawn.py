@@ -1062,14 +1062,14 @@ def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
         'use_mm': use_mm
     }
     cluster_pos = pe.MapNode(fsl.Cluster(**cluster_kwargs),
-                             iterfield=["in_file"],
+                             iterfield=["in_file", "cope_file"],
                              name='cluster_pos')
     if cluster_threshold is not None:
         cluster_pos.inputs.threshold = cluster_threshold
     cluster_pos.inputs.pthreshold = pvalue
 
     cluster_neg = pe.MapNode(fsl.Cluster(**cluster_kwargs),
-                             iterfield=["in_file"],
+                             iterfield=["in_file", "cope_file"],
                              name='cluster_neg')
     if cluster_threshold is not None:
         cluster_neg.inputs.threshold = cluster_threshold
