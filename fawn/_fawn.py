@@ -1097,7 +1097,6 @@ def create_thresholding_workflow(pvalue=0.05, two_tailed=True,
                          name='outputspec')
 
     wf.connect(inputspec, 'in_res4d', smoothness, 'residual_fit_file')
-    wf.connect(inputspec, 'in_copes', dof, 'copes')
     wf.connect(inputspec, 'dof', smoothness, 'dof')
     wf.connect(inputspec, 'in_mask', smoothness, 'mask_file')
     wf.connect(inputspec, 'in_zstats', fwe_nonsig0, 'in_file')
